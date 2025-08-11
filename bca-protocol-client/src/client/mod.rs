@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use shared::{block::CBCABlockType, fchain::CBCAConfig, payload::{IPayload, MPayload, OPayload}};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -39,13 +41,12 @@ impl CBCAClient {
             ).await?;
 
         stream.writable().await?;
-        stream.write_all(payload.as_bytes()).await?;
+        stream.try_write(payload.as_bytes())?;
         
         stream.readable().await?;
-        let mut buffer: String = String::new();
-        let d = stream.read_to_string(&mut buffer).await;
-
-        println!("{:?} {}", d, buffer);
+        let mut buffer: [u8; 1024] = [0u8; 1024];
+        let d = stream.try_read(&mut buffer)?;
+        println!("{:?}", String::from_utf8_lossy(&buffer));
         Ok(())
     }
 

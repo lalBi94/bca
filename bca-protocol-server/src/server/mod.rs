@@ -62,6 +62,7 @@ impl CBCAServer {
         raw_payload: String,
         stream: &mut tokio::net::TcpStream
     ) -> Result<(), std::io::Error> {
+        println!("ok");
         let instance: IPayload = serde_json::from_str(&raw_payload)?;
         let identifier: String = self.shared_queue.handle_add_instance(instance).await?;
         stream.writable().await?;
