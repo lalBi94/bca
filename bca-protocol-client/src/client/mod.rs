@@ -1,0 +1,104 @@
+use shared::{block::CBCABlockType, fchain::CBCAConfig, payload::{IPayload, MPayload, OPayload}};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+pub struct CBCAClient { 
+    ip_message: String,
+    ip_instance: String,
+    ip_offer: String
+}
+
+pub enum CBCAFlag {
+    IPM, IPI, IPO
+}
+
+impl CBCAClient {
+    pub fn spawn(
+        ip_message: String,
+        ip_instance: String,
+        ip_offer: String
+    ) -> Self {
+        Self {
+            ip_message,
+            ip_instance,
+            ip_offer
+        }
+    }
+    
+    async fn fetch(
+        &self, 
+        flag: CBCAFlag, 
+        payload: String
+    ) -> Result<(), std::io::Error> {
+        let mut stream: tokio::net::TcpStream =
+            tokio::net::TcpStream::connect(
+                match flag {
+                    CBCAFlag::IPM => &self.ip_message,
+                    CBCAFlag::IPI => &self.ip_instance,
+                    CBCAFlag::IPO => &self.ip_offer,
+                }
+            ).await?;
+
+        stream.writable().await?;
+        stream.write_all(payload.as_bytes()).await?;
+        
+        stream.readable().await?;
+        let mut buffer: String = String::new();
+        let d = stream.read_to_string(&mut buffer).await;
+
+        println!("{:?} {}", d, buffer);
+        Ok(())
+    }
+
+    pub async fn send_message(
+        &self,
+        author: String, 
+        content: String, 
+        identifier: String
+    ) -> Result<(), std::io::Error> {
+        let payload: MPayload = MPayload { 
+            content, 
+            author, 
+            instance_id: identifier
+        };
+
+        let serialized: String = serde_json::to_string(&payload)?;
+        self.fetch(CBCAFlag::IPM, serialized).await?;
+        
+        Ok(())
+    }
+
+    pub async fn send_offer(
+        &self,
+        amount: f32, 
+        message: Option<String>, 
+        identifier: String,
+        author: String
+    ) -> Result<(), std::io::Error> {
+        let payload: OPayload = OPayload { 
+            amount,
+            author, 
+            message,
+            instance_id: identifier
+        };
+
+        let serialized: String = serde_json::to_string(&payload)?;
+        self.fetch(CBCAFlag::IPO, serialized).await?;
+        
+        Ok(())
+    }
+
+    pub async fn send_instance(
+        &self,
+        config: CBCAConfig
+    ) -> Result<(), std::io::Error> {
+        let payload: IPayload = IPayload { 
+            instance_id: uuid::Uuid::new_v4().to_string(), 
+            config:  config
+        };
+
+        let serialized: String = serde_json::to_string(&payload)?;
+        self.fetch(CBCAFlag::IPI, serialized).await?;
+
+        Ok(())
+    }
+}
