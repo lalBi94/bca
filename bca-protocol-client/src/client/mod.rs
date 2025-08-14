@@ -1,7 +1,12 @@
-use std::time::Duration;
-
-use shared::{block::CBCABlockType, fchain::CBCAConfig, payload::{IPayload, MPayload, OPayload}};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::{time::Duration};
+use shared::{
+    fchain::CBCAConfig, 
+    payload::{IPayload, MPayload, OPayload}
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt}, 
+    time::sleep
+};
 
 pub struct CBCAClient { 
     ip_message: String,
@@ -41,12 +46,14 @@ impl CBCAClient {
             ).await?;
 
         stream.writable().await?;
-        stream.try_write(payload.as_bytes())?;
+        stream.write_all(payload.as_bytes()).await?;
+
+        let mut header = [0u8; 8];
+        stream.read_exact(&mut header).await?;
         
-        stream.readable().await?;
-        let mut buffer: [u8; 1024] = [0u8; 1024];
-        let d = stream.try_read(&mut buffer)?;
-        println!("{:?}", String::from_utf8_lossy(&buffer));
+        println!("{:?}", String::from_utf8_lossy(&header));
+
+        stream.shutdown().await?;
         Ok(())
     }
 
@@ -98,6 +105,9 @@ impl CBCAClient {
         };
 
         let serialized: String = serde_json::to_string(&payload)?;
+
+        
+        
         self.fetch(CBCAFlag::IPI, serialized).await?;
 
         Ok(())

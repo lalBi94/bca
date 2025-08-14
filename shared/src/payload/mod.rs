@@ -1,6 +1,5 @@
 use serde::{Serialize, Deserialize};
 use std::any::{Any, TypeId};
-
 use crate::fchain::CBCAConfig;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

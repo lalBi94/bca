@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{sync::Arc};
 use std::io::Error;
 use shared::payload::{IPayload, MPayload, OPayload};
@@ -65,8 +66,17 @@ impl CBCAServer {
         println!("ok");
         let instance: IPayload = serde_json::from_str(&raw_payload)?;
         let identifier: String = self.shared_queue.handle_add_instance(instance).await?;
-        stream.writable().await?;
-        println!("{:?}", stream.write_all(identifier.as_bytes()).await);
+
+        for chunks in identifier
+            .as_bytes()
+            .chunks(8) {
+                stream.writable().await?;
+                stream.write_all(chunks).await?;
+                stream.flush().await?;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+
+        stream.shutdown().await?;
         Ok(())
     }
 
@@ -103,6 +113,7 @@ impl CBCAServer {
 
             println!("[INSTANCE] {}", payload_raw);
             self.handle_instance(payload_raw, &mut socket).await?;
+            socket.shutdown().await?;
 
             tokio::task::yield_now().await;
         }
