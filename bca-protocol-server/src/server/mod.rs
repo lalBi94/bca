@@ -1,6 +1,7 @@
 use std::time::Duration;
 use std::{sync::Arc};
 use std::io::Error;
+use shared::communication::{self, CBCATcpPayload, CBCATcpPayloadType};
 use shared::payload::{IPayload, MPayload, OPayload};
 use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpSocket};
 
@@ -61,22 +62,19 @@ impl CBCAServer {
     pub async fn handle_instance(
         &self, 
         raw_payload: String,
-        stream: &mut tokio::net::TcpStream
+        stream: Arc<tokio::sync::Mutex<tokio::net::TcpStream>>
     ) -> Result<(), std::io::Error> {
         println!("ok");
         let instance: IPayload = serde_json::from_str(&raw_payload)?;
         let identifier: String = self.shared_queue.handle_add_instance(instance).await?;
+        
+        let response: CBCATcpPayload = CBCATcpPayload::spawn(
+            CBCATcpPayloadType::Data, 
+            identifier
+        );
 
-        for chunks in identifier
-            .as_bytes()
-            .chunks(8) {
-                stream.writable().await?;
-                stream.write_all(chunks).await?;
-                stream.flush().await?;
-                tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-
-        stream.shutdown().await?;
+        let lock_for_res = Arc::clone(&stream);
+        response.send(lock_for_res).await?;
         Ok(())
     }
 
@@ -105,15 +103,19 @@ impl CBCAServer {
         println!("[INSTANCE] on {}.", self.addr_instance.get_full_addr());
 
         loop {
-            let (mut socket, _) = listener.accept().await?;
-            
-            let mut payload_raw: String = String::new();
-            socket.readable().await?;
-            socket.read_to_string(&mut payload_raw).await?;
+            let (socket, _) = listener.accept().await?;
+            let shared_stream_original = Arc::new(
+                tokio::sync::Mutex::new(socket)
+            );
 
-            println!("[INSTANCE] {}", payload_raw);
-            self.handle_instance(payload_raw, &mut socket).await?;
-            socket.shutdown().await?;
+            let mut lock1 = shared_stream_original.lock().await;
+            let mut payload_raw: Vec<u8> = Vec::new();
+            lock1.readable().await?;
+            //lock1.read_to_string(&mut payload_raw).await?;
+            lock1.read_exact(&mut payload_raw).await?;
+
+            println!("[INSTANCE] {:?}", payload_raw);
+            self.handle_instance(payload_raw, Arc::clone(&shared_stream_original)).await?;
 
             tokio::task::yield_now().await;
         }

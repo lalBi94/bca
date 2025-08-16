@@ -1,4 +1,6 @@
-use std::{str::{from_utf8, Utf8Error}};
+use std::{fmt::format, str::{from_utf8, Utf8Error}, sync::Arc, time::Duration};
+
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug)]
 pub enum CBCATcpPayloadType {
@@ -45,6 +47,37 @@ impl CBCATcpPayload {
                 &_ => CBCATcpPayloadType::Unknown
             }, content.to_string())
         )
+    }
+
+    pub async fn read(
+        stream: Arc<tokio::sync::Mutex<tokio::net::TcpStream>>
+    ) -> Result<String, std::io::Error> {
+        let mut header: [u8;8] = [0u8;8];
+        let mut lock = stream.lock().await;
+        lock.read_exact(&mut header).await?;
+        println!("{:?}", header);
+
+        Ok(format!(""))
+    }
+
+    pub async fn send(
+        &self,
+        stream: Arc<tokio::sync::Mutex<tokio::net::TcpStream>>
+    ) -> Result<(), std::io::Error> {
+        let data: Vec<u8> = self.build_response();
+        let mut lock = stream.lock().await;
+
+        for chunks in data
+            .chunks(8) {
+                lock.writable().await?;
+                lock.write_all(chunks).await?;
+                lock.flush().await?;
+                tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+
+        lock.shutdown().await?;
+
+        Ok(())
     }
 
     pub fn build_response(
