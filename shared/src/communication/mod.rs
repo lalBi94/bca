@@ -8,7 +8,54 @@ pub enum CBCATcpPayloadType {
     Data,  // 01
     Debug, // 02
     Reqwest, // 03
-    Unknown
+    Unknown  // else
+}
+
+impl CBCATcpPayloadType {
+    pub fn convert_str(action: &str) -> Self {
+        match &action {
+            &"00" => CBCATcpPayloadType::Error,
+            &"01" => CBCATcpPayloadType::Data,
+            &"02" => CBCATcpPayloadType::Debug,
+            &"03" => CBCATcpPayloadType::Reqwest,
+            &_ => CBCATcpPayloadType::Unknown
+        }
+    }
+
+    pub fn is_error(&self) -> bool {
+        match self {
+            CBCATcpPayloadType::Error => true,
+            _ => false
+        }
+    }
+
+    pub fn is_data(&self) -> bool {
+        match self {
+            CBCATcpPayloadType::Data => true,
+            _ => false
+        }
+    }
+
+    pub fn is_debug(&self) -> bool {
+        match self {
+            CBCATcpPayloadType::Debug => true,
+            _ => false
+        }
+    }
+
+    pub fn is_unknown(&self) -> bool {
+        match self {
+            CBCATcpPayloadType::Unknown => true,
+            _ => false
+        }
+    }
+
+    pub fn is_reqwest(&self) -> bool {
+        match self {
+            CBCATcpPayloadType::Reqwest => true,
+            _ => false
+        }
+    }
 }
 
 // type=[][] length=[][][][][][] length*[]
@@ -51,11 +98,16 @@ impl CBCATcpPayload {
 
     pub async fn read(
         stream: Arc<tokio::sync::Mutex<tokio::net::TcpStream>>
-    ) -> Result<String, std::io::Error> {
+    ) -> Result<String, Utf8Error> {
         let mut header: [u8;8] = [0u8;8];
         let mut lock = stream.lock().await;
         lock.read_exact(&mut header).await?;
-        println!("{:?}", header);
+        let action = &header[0..2];
+        let p_size = &header[3..8];
+
+        let content: Vec<u8> = Vec::new();
+
+        println!("{:?} {:?} {:?}", header, action, p_size);
 
         Ok(format!(""))
     }

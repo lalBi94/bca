@@ -1,3 +1,4 @@
+use std::str::from_utf8;
 use std::time::Duration;
 use std::{sync::Arc};
 use std::io::Error;
@@ -109,14 +110,17 @@ impl CBCAServer {
             );
 
             let mut lock1 = shared_stream_original.lock().await;
-            let mut payload_raw: Vec<u8> = Vec::new();
+
+            let mut header: [u8;8] = [0u8;8];
             lock1.readable().await?;
             //lock1.read_to_string(&mut payload_raw).await?;
-            lock1.read_exact(&mut payload_raw).await?;
+            lock1.read_exact(&mut header).await?;
 
-            println!("[INSTANCE] {:?}", payload_raw);
-            self.handle_instance(payload_raw, Arc::clone(&shared_stream_original)).await?;
+            // println!("[INSTANCE] {:?}", from_utf8(action));
+            // println!("[INSTANCE] {:?}", from_utf8(p_size));
+            //self.handle_instance(payload_raw, Arc::clone(&shared_stream_original)).await?;
 
+            lock1.shutdown().await?;
             tokio::task::yield_now().await;
         }
     }

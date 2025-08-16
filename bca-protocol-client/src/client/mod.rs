@@ -1,4 +1,4 @@
-use std::{time::Duration};
+use std::{sync::Arc, time::Duration};
 use shared::{
     fchain::CBCAConfig, 
     payload::{IPayload, MPayload, OPayload}
@@ -7,6 +7,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt}, 
     time::sleep
 };
+use shared::communication::{CBCATcpPayloadType, CBCATcpPayload};
 
 pub struct CBCAClient { 
     ip_message: String,
@@ -36,7 +37,7 @@ impl CBCAClient {
         flag: CBCAFlag, 
         payload: String
     ) -> Result<(), std::io::Error> {
-        let mut stream: tokio::net::TcpStream =
+        let stream: tokio::net::TcpStream =
             tokio::net::TcpStream::connect(
                 match flag {
                     CBCAFlag::IPM => &self.ip_message,
@@ -45,15 +46,13 @@ impl CBCAClient {
                 }
             ).await?;
 
-        stream.writable().await?;
-        stream.write_all(payload.as_bytes()).await?;
+        let shared_stream = Arc::new(tokio::sync::Mutex::new(stream));
+        let shared_stream_scope = Arc::clone(&shared_stream);
 
-        let mut header = [0u8; 8];
-        stream.read_exact(&mut header).await?;
-        
-        println!("{:?}", String::from_utf8_lossy(&header));
+        let reqwest = CBCATcpPayload::spawn(CBCATcpPayloadType::Reqwest, payload);
+        reqwest.send(shared_stream).await?;
 
-        stream.shutdown().await?;
+        CBCATcpPayload::read(shared_stream_scope).await?;
         Ok(())
     }
 
