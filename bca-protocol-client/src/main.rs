@@ -17,7 +17,7 @@ async fn main() -> Result<(), std::io::Error> {
         "127.0.0.1:8688".to_string()
     );
 
-    client.send_instance(
+    let instance_id = client.send_instance(
         CBCAConfig::spawn(
             None, 
             false, 
@@ -28,6 +28,10 @@ async fn main() -> Result<(), std::io::Error> {
             "EUR".to_string()
         )?
     ).await?;
+
+    //client.send_message("Bilal".to_string(), "Bonjour".to_string(), instance_id.to_string()).await?;
+
+    println!("{:?}", instance_id);
 
     Ok(())
 }

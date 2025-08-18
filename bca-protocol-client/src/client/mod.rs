@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Duration};
 use shared::{
-    fchain::CBCAConfig, 
-    payload::{IPayload, MPayload, OPayload}
+    communication::CBCATcpError, fchain::CBCAConfig, payload::{IPayload, MPayload, OPayload}
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt}, 
@@ -36,7 +35,7 @@ impl CBCAClient {
         &self, 
         flag: CBCAFlag, 
         payload: String
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<String, std::io::Error> {
         let stream: tokio::net::TcpStream =
             tokio::net::TcpStream::connect(
                 match flag {
@@ -52,8 +51,18 @@ impl CBCAClient {
         let reqwest = CBCATcpPayload::spawn(CBCATcpPayloadType::Reqwest, payload);
         reqwest.send(shared_stream).await?;
 
-        CBCATcpPayload::read(shared_stream_scope).await?;
-        Ok(())
+        let result = CBCATcpPayload::read(shared_stream_scope, CBCATcpPayloadType::Data).await;
+
+        match result {
+            Ok(v) => {Ok(v)},
+            Err(v) => {
+                match v {
+                    CBCATcpError::InvalidHeader(v) => {
+                        Err(std::io::Error::new(std::io::ErrorKind::InvalidData, v))
+                    }
+                }
+            }
+        }
     }
 
     pub async fn send_message(
@@ -61,7 +70,7 @@ impl CBCAClient {
         author: String, 
         content: String, 
         identifier: String
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<String, std::io::Error> {
         let payload: MPayload = MPayload { 
             content, 
             author, 
@@ -69,9 +78,9 @@ impl CBCAClient {
         };
 
         let serialized: String = serde_json::to_string(&payload)?;
-        self.fetch(CBCAFlag::IPM, serialized).await?;
+        let res: String = self.fetch(CBCAFlag::IPM, serialized).await?;
         
-        Ok(())
+        Ok(res)
     }
 
     pub async fn send_offer(
@@ -80,7 +89,7 @@ impl CBCAClient {
         message: Option<String>, 
         identifier: String,
         author: String
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<String, std::io::Error> {
         let payload: OPayload = OPayload { 
             amount,
             author, 
@@ -89,26 +98,23 @@ impl CBCAClient {
         };
 
         let serialized: String = serde_json::to_string(&payload)?;
-        self.fetch(CBCAFlag::IPO, serialized).await?;
+        let res: String = self.fetch(CBCAFlag::IPO, serialized).await?;
         
-        Ok(())
+        Ok(res)
     }
 
     pub async fn send_instance(
         &self,
         config: CBCAConfig
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<String, std::io::Error> {
         let payload: IPayload = IPayload { 
             instance_id: uuid::Uuid::new_v4().to_string(), 
             config:  config
         };
 
         let serialized: String = serde_json::to_string(&payload)?;
+        let res: String = self.fetch(CBCAFlag::IPI, serialized).await?;
 
-        
-        
-        self.fetch(CBCAFlag::IPI, serialized).await?;
-
-        Ok(())
+        Ok(res)
     }
 }

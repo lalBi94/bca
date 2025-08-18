@@ -65,17 +65,25 @@ impl CBCAServer {
         raw_payload: String,
         stream: Arc<tokio::sync::Mutex<tokio::net::TcpStream>>
     ) -> Result<(), std::io::Error> {
-        println!("ok");
         let instance: IPayload = serde_json::from_str(&raw_payload)?;
-        let identifier: String = self.shared_queue.handle_add_instance(instance).await?;
+        let identifier: Result<String, std::io::Error>= self.shared_queue.handle_add_instance(instance).await;
         
         let response: CBCATcpPayload = CBCATcpPayload::spawn(
-            CBCATcpPayloadType::Data, 
-            identifier
+            if let Ok(_) = identifier { 
+                CBCATcpPayloadType::Data
+            } else { 
+                CBCATcpPayloadType::Error
+            }, 
+            if let Ok(v) = identifier { 
+                v 
+            } else { 
+                "queue doesnt push an instance.".to_string() 
+            }
         );
 
-        let lock_for_res = Arc::clone(&stream);
+        let lock_for_res: Arc<tokio::sync::Mutex<tokio::net::TcpStream>> = Arc::clone(&stream);
         response.send(lock_for_res).await?;
+
         Ok(())
     }
 
@@ -90,10 +98,27 @@ impl CBCAServer {
 
     pub async fn handle_offer(
         &self, 
-        raw_payload: String
+        raw_payload: String,
+        stream: Arc<tokio::sync::Mutex<tokio::net::TcpStream>>
     ) -> Result<(), std::io::Error> {
         let offer: OPayload = serde_json::from_str(&raw_payload)?;
-        self.shared_queue.handle_add_offer(offer).await?;
+        let pushing: Result<(), std::io::Error> = self.shared_queue.handle_add_offer(offer).await;
+
+        let response: CBCATcpPayload = CBCATcpPayload::spawn(
+            if let Ok(_) = pushing { 
+                CBCATcpPayloadType::Data
+            } else { 
+                CBCATcpPayloadType::Error
+            }, 
+            if let Ok(_) = pushing { 
+                "true".to_string()
+            } else { 
+                "false".to_string()
+            }
+        );
+
+        let lock_for_res: Arc<tokio::sync::Mutex<tokio::net::TcpStream>> = Arc::clone(&stream);
+        response.send(lock_for_res).await?;
         Ok(())
     }
 
@@ -109,19 +134,20 @@ impl CBCAServer {
                 tokio::sync::Mutex::new(socket)
             );
 
-            let mut lock1 = shared_stream_original.lock().await;
+            let shared_stream_response: Arc<tokio::sync::Mutex<tokio::net::TcpStream>> = 
+                Arc::clone(&shared_stream_original);
+            let shared_stream_listener: Arc<tokio::sync::Mutex<tokio::net::TcpStream>> =  
+                Arc::clone(&shared_stream_original);
 
-            let mut header: [u8;8] = [0u8;8];
-            lock1.readable().await?;
-            //lock1.read_to_string(&mut payload_raw).await?;
-            lock1.read_exact(&mut header).await?;
+            let req: Result<String, communication::CBCATcpError> = 
+                CBCATcpPayload::read(shared_stream_listener, CBCATcpPayloadType::Reqwest).await;
 
-            // println!("[INSTANCE] {:?}", from_utf8(action));
-            // println!("[INSTANCE] {:?}", from_utf8(p_size));
-            //self.handle_instance(payload_raw, Arc::clone(&shared_stream_original)).await?;
-
-            lock1.shutdown().await?;
-            tokio::task::yield_now().await;
+            if req.is_ok() {
+                self.handle_instance(req.unwrap().to_string(), shared_stream_response).await?;
+                println!("instance ok.");
+            } else {
+                println!("instance error.");
+            }
         }
     }
 
@@ -133,12 +159,24 @@ impl CBCAServer {
 
         loop {
             let (mut socket, _) = listener.accept().await?;
-            
-            let mut payload_raw: String = String::new();
-            socket.read_to_string(&mut payload_raw).await?;
-            
-            println!("[OFFER] {}", payload_raw);
-            self.handle_offer(payload_raw).await?;
+            let shared_stream_original = Arc::new(
+                tokio::sync::Mutex::new(socket)
+            );
+
+            let shared_stream_response: Arc<tokio::sync::Mutex<tokio::net::TcpStream>> = 
+                Arc::clone(&shared_stream_original);
+            let shared_stream_listener: Arc<tokio::sync::Mutex<tokio::net::TcpStream>> = 
+                Arc::clone(&shared_stream_original);
+
+            let req: Result<String, communication::CBCATcpError> = 
+                CBCATcpPayload::read(shared_stream_listener, CBCATcpPayloadType::Reqwest).await;
+
+            if req.is_ok() {
+                self.handle_offer(req.unwrap(), shared_stream_response).await?;
+                println!("offer ok.");
+            } else {
+                println!("offer error.");
+            }
 
             tokio::task::yield_now().await;
         }
