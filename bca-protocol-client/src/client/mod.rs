@@ -89,7 +89,7 @@ impl CBCAClient {
         message: Option<String>, 
         identifier: String,
         author: String
-    ) -> Result<String, std::io::Error> {
+    ) -> Result<bool, std::io::Error> {
         let payload: OPayload = OPayload { 
             amount,
             author, 
@@ -99,8 +99,9 @@ impl CBCAClient {
 
         let serialized: String = serde_json::to_string(&payload)?;
         let res: String = self.fetch(CBCAFlag::IPO, serialized).await?;
-        
-        Ok(res)
+        let res_parsed: bool = serde_json::from_str(res.as_str())?;
+
+        Ok(res_parsed)
     }
 
     pub async fn send_instance(

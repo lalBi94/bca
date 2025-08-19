@@ -128,7 +128,7 @@ impl CBCATcpPayload {
 
         let action: CBCATcpPayloadType = CBCATcpPayloadType::from_str(action_raw.unwrap());
 
-        if !action.eq(&read_type) {
+        if !action.eq(&read_type) && !action.is_error() {
             return Err(CBCATcpError::InvalidHeader(format!("invalid header, incorrect action.")))
         }
 
@@ -143,12 +143,16 @@ impl CBCATcpPayload {
         println!("action={:?} {:?}", action, action_raw);
         println!("size={:?} {:?}", p_size, p_size_raw);
 
-        for i in 0..f64::floor((p_size.unwrap()/8) as f64) as usize {
+        let p_parsed_size_chunks: usize = f64::ceil(p_size.unwrap() as f64/8.0) as usize;
+
+        for i in 0..p_parsed_size_chunks {
             let mut temp_data: [u8; 8] = [0u8;8];
             let _ = lock.read_exact(&mut temp_data).await;
 
             let _ = temp_data.iter().for_each(|v| {
-                content.push(*v);
+                if v != &0u8 {
+                    content.push(*v);
+                }
             });
 
             println!("{i} {:?}", temp_data);
