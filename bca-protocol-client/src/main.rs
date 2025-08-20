@@ -1,10 +1,10 @@
 mod client;
 mod cli;
 
-use std::sync::Arc;
+use std::{fmt::format, sync::Arc};
 
 use shared::fchain::CBCAConfig;
-use crate::{cli::CBCACli, client::CBCAClient};
+use crate::{cli::{CBCACli, CBCAIdentity}, client::CBCAClient};
 // async fn cli() -> Result<(), std::io::Error> {
 //     let cli = CBCACli::spawn(Some("Bilal".to_string()));
 //     cli.run_cli();
@@ -22,8 +22,15 @@ async fn main() -> Result<(), std::io::Error> {
     let shared_client: Arc<tokio::sync::Mutex<CBCAClient>> = 
         Arc::new(tokio::sync::Mutex::new(client));
 
-    let cli: CBCACli = CBCACli::spawn(None, Arc::clone(&shared_client));
-    cli.run_cli(None).await?;
+    let cli: CBCACli = CBCACli::spawn(Some(
+        CBCAIdentity::spawn(
+            format!("Bilal"),
+            format!("abcd"),
+            None
+        )
+    ), Arc::clone(&shared_client));
+
+    cli.run_cli().await?;
 
     // let instance_id = client.send_instance(
     //     CBCAConfig::spawn(

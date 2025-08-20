@@ -68,9 +68,9 @@ impl CBCACli {
         match &self.author {
             Some(v) => {
                 if let Some(i) = v.get_current_instance() {
-                    print!("[{:?} - {}]> ", v, i);
+                    print!("[{:?} - {}]> ", v.get_display_name(), i);
                 } else {
-                    print!("[{:?} - Nowhere]> ", v);
+                    print!("[{:?} - Nowhere]> ", v.get_display_name());
                 }
             },
             None => {
@@ -114,17 +114,12 @@ impl CBCACli {
     }
 
     pub async fn run_cli(
-        &self,
-        instance_id: Option<String>
+        &self
     ) -> Result<(), std::io::Error> {
         self.clear()?;
-        println!("Hi,\nWelcome to BCA Protocol, the auction ochestrator.\nType 'help' to see commands.\n");
+        println!("Welcome to BCA Protocol, the auction ochestrator.\nType 'help' to see commands.\n");
 
         loop {
-            if let Some(v) = &instance_id {
-                println!("Joining instance [{:?}]...", v);   
-            }
-
             let command: String = self.input(None)?; 
             self.execute_from_str(command).await;
         }
